@@ -197,7 +197,8 @@ def simulate_registration_funnel(events, user, timestamp):
 					completed.append({"event":event[0], "properties":{"time":timestamp}})
 					if event[0] == events[-1][0]:
 						running = False
-						user["people properties"]["Registration Date"] = datetime.datetime.fromtimestamp(timestamp+28800).strftime('%Y-%m-%dT%H:%M:%S')
+						user["people properties"]["Registration Date"] = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%dT%H:%M:%S')
+						user["properties"]["Registration Date"] = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%dT%H:%M:%S')
 			x += 1
 		if random.randint(1,100) > (50 * user["registration_retention"]):
 			running = False
@@ -226,7 +227,7 @@ def retained(user_file, date):
 			transactions.append(transaction)
 		if temp_revenue != 0:
 			revenue.append(temp_revenue)
-		user["people properties"]["Last Visit"] = datetime.datetime.fromtimestamp(timestamp+28800).strftime('%Y-%m-%dT%H:%M:%S')
+		user["people properties"]["Last Visit"] = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%dT%H:%M:%S')
 		users.append(user)
 	event_batcher(events)
 	people_batcher(users, "$set")
@@ -244,6 +245,8 @@ def retention_funnel(user, required_start, events, timestamp):
 	if not user["properties"].get("Current Level"):
 		user["properties"]["Current Level"] = 1
 		user["people properties"]["Current Level"] = 1
+	registration_date = user["properties"]["Registration Date"].split("T")[0].split("-")
+	registration_datetime = datetime.date(int(registration_date[0]), int(registration_date[1]), int(registration_date[2]))
 	while running:
 		session_started = False
 		session_stats = {"games_played":0, "levels_completed":0, "in_app_purchases":0}
@@ -251,7 +254,10 @@ def retention_funnel(user, required_start, events, timestamp):
 			if random.randint(0,100) < event[1]*user["conversion"]:
 				timestamp = random.randint(timestamp, timestamp+3600)
 				start_time = timestamp
-				event = {"event":event[0], "properties":{"time":timestamp}}
+				to_date = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d').split("-")
+				to_date = datetime.date(int(to_date[0]), int(to_date[1]), int(to_date[2]))
+				days_since_registration = (to_date - registration_datetime).days
+				event = {"event":event[0], "properties":{"time":timestamp, "Days Since Registration":days_since_registration}}
 				event["properties"].update(user["properties"])
 				retention_events.append(event)
 				session_started = True
@@ -263,8 +269,11 @@ def retention_funnel(user, required_start, events, timestamp):
 				for event in events:
 					if random.randint(0,100) < event[1]*user["conversion"]:
 						timestamp = random.randint(timestamp, timestamp+600)
-						retained_event = {"event":event[0], "properties":{"time":timestamp}}
-						iso_date = datetime.datetime.fromtimestamp(timestamp+28800).strftime('%Y-%m-%dT%H:%M:%S')
+						to_date = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d').split("-")
+						to_date = datetime.date(int(to_date[0]), int(to_date[1]), int(to_date[2]))
+						days_since_registration = (to_date - registration_datetime).days
+						retained_event = {"event":event[0], "properties":{"time":timestamp, "Days Since Registration":days_since_registration}}
+						iso_date = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%dT%H:%M:%S')
 						if event[0] == "Game Played":
 							session_stats["games_played"]+=1
 							if not user["properties"].get("Total Games Played"):
@@ -301,8 +310,8 @@ def retention_funnel(user, required_start, events, timestamp):
 						retention_events.append(retained_event)
 				if random.randint(0,100) > 50*user["retention"]:
 					engaged = False
-			end_time = random.randint(timestamp, timestamp+600)
-			event = {"event":"Session End", "properties":{"time":end_time, "Session Time":(end_time-start_time), "Games Played This Session":session_stats["games_played"], "In-App Purchases This Session":session_stats["in_app_purchases"]}}
+			timestamp = random.randint(timestamp, timestamp+600)
+			event = {"event":"Session End", "properties":{"time":timestamp, "Session Time":(timestamp-start_time), "Games Played This Session":session_stats["games_played"], "In-App Purchases This Session":session_stats["in_app_purchases"]}}
 			session_started = False
 			event["properties"].update(user["properties"])
 			retention_events.append(event)
